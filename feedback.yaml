@@ -1,0 +1,3 @@
+loops:
+  run:
+    command: cabal run

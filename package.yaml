@@ -1,0 +1,65 @@
+---
+name: til
+version: 0.0.0.1
+
+license: MIT
+license-file: LICENSE
+
+dependencies:
+  - base
+  - brick
+  - bytestring
+  - directory
+  - filepath
+  - genvalidity
+  - genvalidity-text
+  - nonempty-containers
+  - optparse-applicative
+  - optparse-generic
+  - parsec
+  - process
+  - relude
+  - sydtest
+  - text
+  - time
+  - time-parsers
+  - vty
+  - word-wrap
+
+
+library:
+  source-dirs: ./src/
+
+ghc-options:
+  - -fwrite-ide-info
+  - -Wall
+  - -Wincomplete-uni-patterns
+  - -Wincomplete-record-updates
+  - -Wpartial-fields
+  - -Widentities
+  - -Wredundant-constraints
+  - -Wcpp-undef
+  - -Wunused-packages
+
+executables:
+  til:
+    main: Main.hs
+    source-dirs: ./src/
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
+
+tests:
+  til-test:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
+    dependencies:
+      - genvalidity-sydtest
+      - sydtest
+      - sydtest-discover
+      - til
