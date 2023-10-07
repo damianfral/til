@@ -158,15 +158,25 @@ eventHandler (VtyEvent evt) = case evt of
   V.EvKey (KChar 'q') _ -> halt
   V.EvKey (KChar 'J') _ -> modify movePrev
   V.EvKey (KChar 'K') _ -> modify moveNext
-  V.EvKey (KChar 'j') _ ->
-    gets current >>= \Entry {..} -> vScrollBy (viewportScroll $ Content entryDay) 1
-  V.EvKey (KChar 'k') _ ->
-    gets current >>= \Entry {..} -> vScrollBy (viewportScroll $ Content entryDay) (-1)
-  V.EvKey (KChar 'e') _ ->
-    gets current >>= \Entry {..} ->
-      suspendAndResume' $ callProcess "$EDITOR" [entryFile]
+  V.EvKey (KChar 'j') _ -> increaseScrollContent
+  V.EvKey (KChar 'k') _ -> decreaseScrollContent
+  V.EvKey (KChar 'e') _ -> editContent
   _ -> pure ()
 eventHandler _ = pure ()
+
+increaseScrollContent = do
+  Entry {..} <- gets current
+  let resource = Content entryDay
+  vScrollBy (viewportScroll resource) 1
+
+decreaseScrollContent = do
+  Entry {..} <- gets current
+  let resource = Content entryDay
+  vScrollBy (viewportScroll resource) (-1)
+
+editContent = do
+  Entry {..} <- gets current
+  suspendAndResume' $ callProcess "hx" [entryFile]
 
 isMarkdownFile :: FilePath -> Bool
 isMarkdownFile file = takeExtension file == ".md"
