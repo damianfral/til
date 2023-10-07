@@ -163,7 +163,8 @@ eventHandler (VtyEvent evt) = case evt of
   V.EvKey (KChar 'k') _ ->
     gets current >>= \Entry {..} -> vScrollBy (viewportScroll $ Content entryDay) (-1)
   V.EvKey (KChar 'e') _ ->
-    gets current >>= \Entry {..} -> suspendAndResume' (callProcess "hx" [entryFile])
+    gets current >>= \Entry {..} ->
+      suspendAndResume' $ callProcess "$EDITOR" [entryFile]
   _ -> pure ()
 eventHandler _ = pure ()
 
