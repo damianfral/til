@@ -36,10 +36,6 @@
     {
       overlays.default = final: prev:
         with final.haskell.lib; {
-          cabal-install = final.writeShellScriptBin "cabal" ''
-            ${prev.hpack}/bin/hpack
-            ${prev.cabal-install}/bin/cabal $@
-          '';
           haskellPackages = prev.haskellPackages.override (old: {
             overrides =
               final.lib.composeExtensions
