@@ -86,6 +86,7 @@
             cabal-install
             ghcid
             haskell-language-server
+            haskellPackages.implicit-hie
             hlint
             mdr
             nil

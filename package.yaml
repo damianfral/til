@@ -25,6 +25,10 @@ dependencies:
   - time-parsers
   - vty
   - word-wrap
+  - pandoc
+  - pandoc-types
+  - data-default
+  - split
 
 
 library:
@@ -49,17 +53,3 @@ executables:
       - -rtsopts
       - -threaded
       - -with-rtsopts=-N
-
-tests:
-  til-test:
-    main: Spec.hs
-    source-dirs: test
-    ghc-options:
-      - -rtsopts
-      - -threaded
-      - -with-rtsopts=-N
-    dependencies:
-      - genvalidity-sydtest
-      - sydtest
-      - sydtest-discover
-      - til

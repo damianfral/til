@@ -1,6 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -16,66 +14,20 @@ import qualified Brick.AttrMap as A
 import Brick.Widgets.Border
 import Control.Exception (try)
 import qualified Data.ByteString as BS
-import Data.GenValidity.Text ()
 import qualified Data.List.NonEmpty as NE
 import Data.Text hiding (elem, reverse, take)
-import qualified Data.Text as T
-import Data.Text.IO
 import Data.Time
 import Data.Time.Format.ISO8601
 import qualified Data.Time.Parsers as P
 import Graphics.Vty (Key (..))
 import qualified Graphics.Vty as V
-import Relude hiding (on, putStrLn)
+import Log
+import Relude hiding (on)
 import System.Directory
 import System.FilePath (takeExtension, (<.>), (</>))
 import System.Process
 import qualified Text.Parsec as Parsec
-import Text.Wrap
-
---------------------------------------------------------------------------------
-
-data Zipper a = Zipper
-  { current :: a,
-    previous :: [a],
-    next :: [a]
-  }
-  deriving stock (Show, Eq, Ord, Generic, Functor)
-
-zipperToNEList :: Zipper a -> NonEmpty a
-zipperToNEList Zipper {..} = case reverse previous of
-  [] -> current :| next
-  p : ps -> p :| (ps <> [current] <> next)
-
-zipperToList :: Zipper a -> [a]
-zipperToList = NE.toList . zipperToNEList
-
-instance Semigroup (Zipper a) where
-  z1 <> z2 = z2 {previous = zipperToList z1 <> previous z2}
-
-moveNext :: Zipper a -> Zipper a
-moveNext z@(Zipper _ _ []) = z
-moveNext (Zipper current previous next) = Zipper current' previous' next'
-  where
-    (current' : next') = next
-    previous' = current : previous
-
-movePrev :: Zipper a -> Zipper a
-movePrev z@(Zipper _ [] _) = z
-movePrev (Zipper current previous next) = Zipper current' previous' next'
-  where
-    (current' : previous') = previous
-    next' = current : next
-
---------------------------------------------------------------------------------
-
-data Entry = Entry
-  { entryDay :: Day,
-    entryFile :: FilePath,
-    entryContent :: Text
-    -- entryScrollOffset :: Int
-  }
-  deriving (Show, Eq, Ord)
+import UI.MarkdownWidget (drawMarkdown)
 
 --------------------------------------------------------------------------------
 
@@ -92,11 +44,9 @@ runApp = do
   initialAppState <- loadJournalDirectory "/home/damian/code/vimwiki/log"
   st <- defaultMain app initialAppState
   print st
-  putStrLn ""
 
 getCurrentDay :: IO Day
-getCurrentDay = do
-  localDay . zonedTimeToLocalTime <$> getZonedTime
+getCurrentDay = localDay . zonedTimeToLocalTime <$> getZonedTime
 
 selected :: AttrName
 selected = attrName "selected"
@@ -119,7 +69,7 @@ draw appState@(Zipper {..}) =
   pure $
     hBox
       [ border $ drawSideBar appState,
-        border $ drawMarkdown (entryDay current) $ entryContent current
+        border $ drawContent (entryDay current) $ entryContent current
       ]
 
 drawSideBar :: AppState -> Widget Resources
@@ -135,19 +85,12 @@ drawSideBar Zipper {..} =
                 drawEntry <$> previous
               ]
 
-drawMarkdown :: Day -> Text -> Widget Resources
-drawMarkdown day =
+drawContent :: Day -> Text -> Widget Resources
+drawContent day =
   withVScrollBars OnRight
     . viewport (Content day) Vertical
     . padAll 1
-    -- . vBox
-    . txtWrapWith wrapSettings
-  where
-    wrapSettings =
-      defaultWrapSettings
-        { preserveIndentation = True,
-          fillStrategy = FillPrefix "↪ "
-        }
+    . drawMarkdown
 
 drawEntry :: Entry -> Widget n
 drawEntry Entry {..} = hBox [txt $ show entryDay]
@@ -164,16 +107,19 @@ eventHandler (VtyEvent evt) = case evt of
   _ -> pure ()
 eventHandler _ = pure ()
 
+increaseScrollContent :: EventM Resources (Zipper Entry) ()
 increaseScrollContent = do
   Entry {..} <- gets current
   let resource = Content entryDay
   vScrollBy (viewportScroll resource) 1
 
+decreaseScrollContent :: EventM Resources (Zipper Entry) ()
 decreaseScrollContent = do
   Entry {..} <- gets current
   let resource = Content entryDay
   vScrollBy (viewportScroll resource) (-1)
 
+editContent :: EventM Resources (Zipper Entry) ()
 editContent = do
   Entry {..} <- gets current
   suspendAndResume' $ callProcess "hx" [entryFile]
@@ -186,7 +132,7 @@ loadJournalDirectory fp = do
   today <- getCurrentDay
   paths <- Relude.filter isMarkdownFile <$> listDirectory fp
   let days = rights $ Parsec.runParser P.day () fp <$> paths
-  let days' = NE.reverse $ NE.nub $ today :| reverse (sort days)
+  let days' = NE.reverse $ NE.nub $ today :| sort days
   zippers <- forM days' $ \entryDay -> do
     let entryFile = fp </> dayToMarkdownFilename entryDay
     eContent <- try $ BS.readFile entryFile
@@ -196,8 +142,6 @@ loadJournalDirectory fp = do
     let entry = Entry entryDay entryFile entryContent
     pure $ Zipper entry [] []
   pure $ sconcat zippers
-
-mdr file = T.pack <$> readProcess "some-md-linter" [file] ""
 
 dayToMarkdownFilename :: Day -> FilePath
 dayToMarkdownFilename day = formatShow iso8601Format day <.> "md"
