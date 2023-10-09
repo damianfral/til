@@ -52,7 +52,6 @@ movePrev (Zipper current previous next) = Zipper current' previous' next'
 
 data Entry = Entry
   { entryDay :: Day,
-    entryFile :: FilePath,
-    entryContent :: Text
+    entryFile :: FilePath
   }
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)

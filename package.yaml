@@ -29,6 +29,8 @@ dependencies:
   - pandoc-types
   - data-default
   - split
+  - generic-lens
+  - lens
 
 
 library:
