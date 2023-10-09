@@ -1,15 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module UI.MarkdownWidget where
+module UI.Markdown where
 
 import Brick
 import Brick.Widgets.Border (border)
 import Data.Default
 import Data.List.Split (splitOn)
+import qualified Data.Text as T
 import Relude
 import Text.Pandoc
 import Text.Wrap
+import UI.Style
 
 wrapSettings :: WrapSettings
 wrapSettings =
@@ -20,10 +22,12 @@ wrapSettings =
 
 drawMarkdown :: Text -> Widget n
 drawMarkdown md = do
-  let result = runPure $ readMarkdown def $ wrapText wrapSettings 80 md
+  let result = runPure $ readMarkdown settings $ wrapText wrapSettings 80 md
   case result of
     Left _ -> txt md
     Right pandoc -> drawPandoc pandoc
+  where
+    settings = def {readerExtensions = pandocExtensions}
 
 drawPandoc :: Pandoc -> Widget n
 drawPandoc (Pandoc _ blocks) = vBox $ drawPandocBlock <$> blocks
@@ -35,9 +39,12 @@ drawPandocBlock (Para paragraph) = do
   where
     lines' = splitOn [SoftBreak] paragraph
     linesWidgets = lines' <&> (\line -> hBox $ drawInline <$> line)
-drawPandocBlock (LineBlock paragraphs) = drawPandocBlock $ Para $ mconcat paragraphs
+drawPandocBlock (LineBlock paragraphs) = vBox $ drawPandocBlock . Para <$> paragraphs
 -- borderBox $ mconcat $ fmap drawInline <$> paragraphs
-drawPandocBlock (CodeBlock _ code) = borderBox $ pure $ txt code
+drawPandocBlock (CodeBlock _ code) = do
+  borderBox $ drawPandocBlock . Para . pure . Str <$> lines'
+  where
+    lines' = T.lines code
 drawPandocBlock (BlockQuote blocks) = borderBox $ drawPandocBlock <$> blocks
 drawPandocBlock (OrderedList _ listItems) = drawList show listItems
 drawPandocBlock (BulletList listItems) = drawList (const "*") listItems
@@ -66,9 +73,9 @@ drawListItem getPrefix i blocks =
 
 drawInline :: Inline -> Widget n
 drawInline (Str t) = txt t
-drawInline (Emph ts) = withAttr (attrName "italic") $ vBox $ drawInline <$> ts
-drawInline (Underline ts) = withAttr (attrName "underline") $ vBox $ drawInline <$> ts
-drawInline (Strong ts) = withAttr (attrName "strong") $ vBox $ drawInline <$> ts
+drawInline (Emph ts) = italic $ vBox $ drawInline <$> ts
+drawInline (Underline ts) = underline $ vBox $ drawInline <$> ts
+drawInline (Strong ts) = bold $ vBox $ drawInline <$> ts
 drawInline (Strikeout ts) = withAttr (attrName "strikeout") $ vBox $ drawInline <$> ts
 drawInline (Quoted _ ts) = withAttr (attrName "aaaa") $ vBox $ drawInline <$> ts
 drawInline (Cite _ ts) = drawInline $ Quoted SingleQuote ts
@@ -76,5 +83,7 @@ drawInline (Code _ t) = drawInline $ Str t
 drawInline Space = str " "
 -- drawInline SoftBreak = str ""
 -- drawInline LineBreak = str "\n"
-drawInline (Link _ _ (url, title)) = hyperlink url $ txt $ if title == "" then url else title
+drawInline (Link _ inline (url, _)) =
+  hyperlink url $
+    if null inline then txt url else drawPandocBlock (Plain inline)
 drawInline _ = emptyWidget

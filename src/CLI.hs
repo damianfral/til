@@ -10,7 +10,6 @@ module CLI (runApp) where
 
 import Brick
 import qualified Brick.AttrMap ()
-import qualified Brick.AttrMap as A
 import Brick.Widgets.Border
 import Control.Exception (try)
 import qualified Data.ByteString as BS
@@ -27,7 +26,8 @@ import System.Directory
 import System.FilePath (takeExtension, (<.>), (</>))
 import System.Process
 import qualified Text.Parsec as Parsec
-import UI.MarkdownWidget (drawMarkdown)
+import UI.Markdown (drawMarkdown)
+import UI.Style
 
 --------------------------------------------------------------------------------
 
@@ -42,17 +42,11 @@ data Resources = SideBar | Content Day
 runApp :: IO ()
 runApp = do
   initialAppState <- loadJournalDirectory "/home/damian/code/vimwiki/log"
-  st <- defaultMain app initialAppState
-  print st
+  void $ defaultMain app initialAppState
+  putStrLn ""
 
 getCurrentDay :: IO Day
 getCurrentDay = localDay . zonedTimeToLocalTime <$> getZonedTime
-
-selected :: AttrName
-selected = attrName "selected"
-
-theMap :: A.AttrMap
-theMap = A.attrMap V.defAttr [(selected, fg V.yellow)]
 
 app :: App AppState e Resources
 app = App {..}
@@ -62,7 +56,7 @@ app = App {..}
     appChooseCursor _ _ = Nothing
     appHandleEvent = eventHandler
     appStartEvent = pure ()
-    appAttrMap = pure theMap
+    appAttrMap = pure styleMap
 
 draw :: AppState -> [Widget Resources]
 draw appState@(Zipper {..}) =
@@ -81,7 +75,7 @@ drawSideBar Zipper {..} =
           vBox $
             mconcat
               [ drawEntry <$> reverse next,
-                [withAttr selected $ visible $ drawEntry current],
+                [selected $ visible $ drawEntry current],
                 drawEntry <$> previous
               ]
 
