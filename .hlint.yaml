@@ -128,4 +128,3 @@
 
   - { name: NamedFieldPuns, within: [] }
   - { name: TupleSections, within: [] }
-  - { name: OverloadedLabels, within: [] }
