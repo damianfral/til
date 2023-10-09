@@ -10,8 +10,6 @@
 module Log where
 
 import qualified Data.List.NonEmpty as NE
-import Data.Text hiding (reverse)
-import Data.Time
 import Relude
 
 --------------------------------------------------------------------------------
@@ -49,9 +47,3 @@ movePrev (Zipper current previous next) = Zipper current' previous' next'
     next' = current : next
 
 --------------------------------------------------------------------------------
-
-data Entry = Entry
-  { entryDay :: Day,
-    entryFile :: FilePath
-  }
-  deriving (Show, Eq, Ord, Generic)

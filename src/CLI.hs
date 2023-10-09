@@ -36,8 +36,11 @@ import UI.Style
 
 --------------------------------------------------------------------------------
 
+newtype AppConfig = AppConfig {appConfigLogPath :: FilePath}
+  deriving (Eq, Show, Ord, Generic)
+
 data AppState = AppState
-  {entries :: Zipper Entry, markdown :: Text}
+  {entries :: Zipper Day, markdown :: Text}
   deriving (Eq, Show, Ord, Generic)
 
 data AppAction = SelectPrevious | SelectNext | EditCurrent
@@ -48,20 +51,23 @@ data Resources = SideBar | Content Day
 
 runApp :: IO ()
 runApp = do
-  initialAppState <- loadJournalDirectory "/home/damian/code/vimwiki/log"
-  void $ defaultMain app initialAppState
+  initialAppState <- loadJournalDirectory myAppConfig
+  void $ defaultMain (app myAppConfig) initialAppState
   putStrLn ""
+
+myAppConfig :: AppConfig
+myAppConfig = AppConfig "/home/damian/code/vimwiki/log"
 
 getCurrentDay :: IO Day
 getCurrentDay = localDay . zonedTimeToLocalTime <$> getZonedTime
 
-app :: App AppState e Resources
-app = App {..}
+app :: AppConfig -> App AppState e Resources
+app appConfig = App {..}
   where
     appDraw = draw
     appChooseCursor :: s -> [CursorLocation Resources] -> Maybe (CursorLocation Resources)
     appChooseCursor _ _ = Nothing
-    appHandleEvent = eventHandler
+    appHandleEvent = eventHandler appConfig
     appStartEvent = pure ()
     appAttrMap = pure styleMap
 
@@ -70,7 +76,7 @@ draw appState@(AppState {..}) =
   pure $
     hBox
       [ border $ drawSideBar appState,
-        border $ drawContent (entryDay $ current entries) markdown
+        border $ drawContent (current entries) markdown
       ]
 
 drawSideBar :: AppState -> Widget Resources
@@ -93,75 +99,70 @@ drawContent day =
     . padAll 1
     . drawMarkdown
 
-drawEntry :: Entry -> Widget n
-drawEntry Entry {..} = hBox [txt $ show entryDay]
+drawEntry :: Day -> Widget n
+drawEntry day = hBox [txt $ show day]
 
-eventHandler :: BrickEvent Resources e -> EventM Resources AppState ()
-eventHandler (VtyEvent evt) = case evt of
+eventHandler :: AppConfig -> BrickEvent Resources e -> EventM Resources AppState ()
+eventHandler appConfig (VtyEvent evt) = case evt of
   V.EvKey KEsc _ -> halt
   V.EvKey (KChar 'q') _ -> halt
   V.EvKey (KChar 'J') _ -> do
     modify $ #entries %~ movePrev
-    refreshCurrentFile
+    refreshCurrentFile appConfig
   V.EvKey (KChar 'K') _ -> do
-    refreshCurrentFile
+    refreshCurrentFile appConfig
     modify $ #entries %~ moveNext
   V.EvKey (KChar 'j') _ -> increaseScrollContent
   V.EvKey (KChar 'k') _ -> decreaseScrollContent
-  V.EvKey (KChar 'e') _ -> editContent
+  V.EvKey (KChar 'e') _ -> editContent appConfig
   _ -> pure ()
-eventHandler _ = pure ()
+eventHandler _ _ = pure ()
 
-refreshCurrentFile :: EventM Resources AppState ()
-refreshCurrentFile = do
+refreshCurrentFile :: AppConfig -> EventM Resources AppState ()
+refreshCurrentFile appConfig = do
   entries <- gets $ view #entries
-  md <- liftIO $ readEntryFile $ current entries
+  md <- liftIO $ readLogFile $ dayToFilePath appConfig (current entries)
   modify $ #markdown .~ md
 
 increaseScrollContent :: EventM Resources AppState ()
 increaseScrollContent = do
-  Entry {..} <- gets $ view $ #entries . #current
-  let resource = Content entryDay
+  day <- gets $ view $ #entries . #current
+  let resource = Content day
   vScrollBy (viewportScroll resource) 1
 
 decreaseScrollContent :: EventM Resources AppState ()
 decreaseScrollContent = do
-  Entry {..} <- gets $ view $ #entries . #current
-  let resource = Content entryDay
+  day <- gets $ view $ #entries . #current
+  let resource = Content day
   vScrollBy (viewportScroll resource) (-1)
 
-editContent :: EventM Resources AppState ()
-editContent = do
-  Entry {..} <- gets $ view $ #entries . #current
-  suspendAndResume' $ callProcess "hx" [entryFile]
+editContent :: AppConfig -> EventM Resources AppState ()
+editContent appConfig = do
+  day <- gets $ view $ #entries . #current
+  let file = dayToFilePath appConfig day
+  suspendAndResume' $ callProcess "hx" [file]
 
 isMarkdownFile :: FilePath -> Bool
 isMarkdownFile file = takeExtension file == ".md"
 
-loadJournalDirectory :: FilePath -> IO AppState
-loadJournalDirectory fp = do
+loadJournalDirectory :: AppConfig -> IO AppState
+loadJournalDirectory appConfig@AppConfig {..} = do
   today <- getCurrentDay
-  paths <- Relude.filter isMarkdownFile <$> listDirectory fp
-  let days = rights $ Parsec.runParser P.day () fp <$> paths
+  paths <- Relude.filter isMarkdownFile <$> listDirectory appConfigLogPath
+  let days = rights $ Parsec.runParser P.day () appConfigLogPath <$> paths
   let days' = NE.reverse $ NE.nub $ today :| sort days
-  zippers <- forM days' $ \entryDay -> do
-    let entryFile = fp </> dayToMarkdownFilename entryDay
-    -- eContent <- try $ BS.readFile entryFile
-    -- entryContent <- case eContent of
-    --   Left (SomeException e) -> print e >> pure ""
-    --   Right c -> pure $ decodeUtf8With lenientDecode c
-    let entry = Entry entryDay entryFile
-    pure $ Zipper entry [] []
+  zippers <- forM days' $ \day -> do
+    pure $ Zipper day [] []
   let entries = sconcat zippers
-  entryContent <- readEntryFile $ entries ^. #current
+  entryContent <- readLogFile $ dayToFilePath appConfig $ entries ^. #current
   pure $ AppState {entries = entries, markdown = entryContent}
 
-readEntryFile :: Entry -> IO Text
-readEntryFile Entry {..} = do
-  eContent <- try $ BS.readFile entryFile
+readLogFile :: FilePath -> IO Text
+readLogFile file = do
+  eContent <- try $ BS.readFile file
   case eContent of
     Left (SomeException e) -> print e >> pure ""
     Right c -> pure $ decodeUtf8With lenientDecode c
 
-dayToMarkdownFilename :: Day -> FilePath
-dayToMarkdownFilename day = formatShow iso8601Format day FP.<.> "md"
+dayToFilePath :: AppConfig -> Day -> FilePath
+dayToFilePath AppConfig {..} day = appConfigLogPath </> formatShow iso8601Format day FP.<.> "md"
