@@ -24,7 +24,7 @@ drawMarkdown :: Text -> Widget n
 drawMarkdown md = do
   let result = runPure $ readMarkdown settings $ wrapText wrapSettings 80 md
   case result of
-    Left _ -> txt md
+    Left _ -> txtWrap md
     Right pandoc -> drawPandoc pandoc
   where
     settings = def {readerExtensions = pandocExtensions}
