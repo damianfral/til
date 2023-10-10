@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module UI.Markdown where
+module UI.Markdown (drawMarkdown) where
 
 import Brick
 import Brick.Widgets.Border (border)
@@ -32,21 +32,23 @@ drawMarkdown md = do
 drawPandoc :: Pandoc -> Widget n
 drawPandoc (Pandoc _ blocks) = vBox $ drawPandocBlock <$> blocks
 
-drawPandocBlock :: Block -> Widget n
-drawPandocBlock (Plain lines') = hBox $ drawInline <$> lines'
-drawPandocBlock (Para paragraph) = do
-  padTop (Pad 0) $ padBottom (Pad 1) $ vBox linesWidgets
+drawParagraph :: [Inline] -> Widget n
+drawParagraph paragraph = vBox $ lines' <&> (\line -> hBox $ drawInline <$> line)
   where
     lines' = splitOn [SoftBreak] paragraph
-    linesWidgets = lines' <&> (\line -> hBox $ drawInline <$> line)
+
+drawPandocBlock :: Block -> Widget n
+drawPandocBlock (Plain lines') = drawParagraph lines'
+drawPandocBlock (Para paragraph) = padTop (Pad 0) $ padBottom (Pad 1) $ drawParagraph paragraph
 drawPandocBlock (LineBlock paragraphs) = vBox $ drawPandocBlock . Para <$> paragraphs
--- borderBox $ mconcat $ fmap drawInline <$> paragraphs
 drawPandocBlock (CodeBlock _ code) = do
   padBottom (Pad 1) $ borderBox $ drawPandocBlock . Plain . pure . Str <$> lines'
   where
     lines' = T.lines code
 drawPandocBlock (BlockQuote blocks) = borderBox $ drawPandocBlock <$> blocks
-drawPandocBlock (OrderedList _ listItems) = drawList show listItems
+drawPandocBlock (OrderedList _ listItems) = drawList ixToString listItems
+  where
+    ixToString ix = show ix <> "."
 drawPandocBlock (BulletList listItems) = drawList (const "*") listItems
 drawPandocBlock (Header i _ inlines) =
   padBottom (Pad 1) $
@@ -62,7 +64,10 @@ borderBox :: [Widget n] -> Widget n
 borderBox = border . vBox
 
 drawList :: (Int -> String) -> [[Block]] -> Widget n
-drawList getPrefix listItems = vBox $ uncurry (drawListItem getPrefix) <$> zip [1 ..] listItems
+drawList getPrefix listItems =
+  padBottom (Pad 1) $ vBox $ uncurry (drawListItem getPrefix) <$> ixItems
+  where
+    ixItems = zip [1 ..] listItems
 
 drawListItem :: (Int -> String) -> Int -> [Block] -> Widget n
 drawListItem getPrefix i blocks =
