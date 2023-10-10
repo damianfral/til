@@ -35,22 +35,22 @@ drawPandoc (Pandoc _ blocks) = vBox $ drawPandocBlock <$> blocks
 drawPandocBlock :: Block -> Widget n
 drawPandocBlock (Plain lines') = hBox $ drawInline <$> lines'
 drawPandocBlock (Para paragraph) = do
-  padTop (Pad 1) $ padBottom (Pad 1) $ vBox linesWidgets
+  padTop (Pad 0) $ padBottom (Pad 1) $ vBox linesWidgets
   where
     lines' = splitOn [SoftBreak] paragraph
     linesWidgets = lines' <&> (\line -> hBox $ drawInline <$> line)
 drawPandocBlock (LineBlock paragraphs) = vBox $ drawPandocBlock . Para <$> paragraphs
 -- borderBox $ mconcat $ fmap drawInline <$> paragraphs
 drawPandocBlock (CodeBlock _ code) = do
-  borderBox $ drawPandocBlock . Para . pure . Str <$> lines'
+  padBottom (Pad 1) $ borderBox $ drawPandocBlock . Plain . pure . Str <$> lines'
   where
     lines' = T.lines code
 drawPandocBlock (BlockQuote blocks) = borderBox $ drawPandocBlock <$> blocks
 drawPandocBlock (OrderedList _ listItems) = drawList show listItems
 drawPandocBlock (BulletList listItems) = drawList (const "*") listItems
 drawPandocBlock (Header i _ inlines) =
-  padTop (Pad 1) $
-    padBottom (Pad 1) $
+  padBottom (Pad 1) $
+    bold $
       hBox
         [ str $ replicate i '#' <> " ",
           str "",
