@@ -46,9 +46,6 @@ data AppAction = SelectPrevious | SelectNext | EditCurrent
 data Resources = SideBar | Content Day
   deriving (Eq, Show, Ord)
 
-myAppConfig :: AppConfig
-myAppConfig = AppConfig "/home/damian/code/vimwiki/log"
-
 getCurrentDay :: IO Day
 getCurrentDay = localDay . zonedTimeToLocalTime <$> getZonedTime
 
