@@ -78,17 +78,20 @@ drawListItem getPrefix i blocks =
 
 drawInline :: Inline -> Widget n
 drawInline (Str t) = txt t
-drawInline (Emph ts) = italic $ vBox $ drawInline <$> ts
+drawInline (Emph ts) = italic $ hBox $ drawInline <$> ts
 drawInline (Underline ts) = underline $ vBox $ drawInline <$> ts
-drawInline (Strong ts) = bold $ vBox $ drawInline <$> ts
-drawInline (Strikeout ts) = withAttr (attrName "strikeout") $ vBox $ drawInline <$> ts
-drawInline (Quoted _ ts) = withAttr (attrName "aaaa") $ vBox $ drawInline <$> ts
+drawInline (Strong ts) = bold $ hBox $ drawInline <$> ts
+drawInline (Strikeout ts) = withAttr (attrName "strikeout") $ hBox $ drawInline <$> ts
+drawInline (Quoted _ ts) = italic $ hBox $ drawInline <$> Str "> " : ts
 drawInline (Cite _ ts) = drawInline $ Quoted SingleQuote ts
 drawInline (Code _ t) = drawInline $ Str t
 drawInline Space = str " "
--- drawInline SoftBreak = str ""
--- drawInline LineBreak = str "\n"
+drawInline SoftBreak = str " "
+drawInline LineBreak = str "\n"
 drawInline (Link _ inline (url, _)) =
-  hyperlink url $
-    if null inline then txt url else drawPandocBlock (Plain inline)
+  underline $
+    hyperlink url $
+      if null inline
+        then txt url
+        else hBox $ (drawInline <$> inline) <> [txt $ " " <> url]
 drawInline _ = emptyWidget
