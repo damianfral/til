@@ -34,31 +34,26 @@ drawPandoc :: Pandoc -> Widget n
 drawPandoc (Pandoc _ blocks) = vBox $ drawPandocBlock <$> blocks
 
 drawParagraph :: [Inline] -> Widget n
-drawParagraph paragraph = vBox $ lines' <&> (\line -> hBox $ drawInline <$> line)
+drawParagraph paragraph = vBox $ hBox . fmap drawInline <$> lines'
   where
     lines' = splitOn [SoftBreak] paragraph
 
 drawPandocBlock :: Block -> Widget n
 drawPandocBlock (Plain lines') = drawParagraph lines'
-drawPandocBlock (Para paragraph) = padTop (Pad 0) $ padBottom (Pad 1) $ drawParagraph paragraph
-drawPandocBlock (LineBlock paragraphs) = vBox $ drawPandocBlock . Para <$> paragraphs
-drawPandocBlock (CodeBlock _ code) = do
-  padBottom (Pad 1) $ borderBox $ drawPandocBlock . Plain . pure . Str <$> lines'
-  where
-    lines' = T.lines code
+drawPandocBlock (Para paragraph) = pb1 $ drawParagraph paragraph
+drawPandocBlock (LineBlock paragraphs) =
+  vBox $ drawPandocBlock . Para <$> paragraphs
+drawPandocBlock (CodeBlock _ code) =
+  pb1 $ borderBox $ drawPandocBlock . Plain . pure . Str <$> T.lines code
 drawPandocBlock (BlockQuote blocks) = borderBox $ drawPandocBlock <$> blocks
 drawPandocBlock (OrderedList _ listItems) = drawList ixToString listItems
   where
     ixToString ix = show ix <> "."
 drawPandocBlock (BulletList listItems) = drawList (const "*") listItems
 drawPandocBlock (Header i _ inlines) =
-  padBottom (Pad 1) $
-    bold $
-      hBox
-        [ str $ replicate i '#' <> " ",
-          str "",
-          hBox $ drawInline <$> inlines
-        ]
+  pb1 $ bold $ hBox [str prefix, hBox $ drawInline <$> inlines]
+  where
+    prefix = replicate i '#' <> " "
 drawPandocBlock (Table _ __ _ tableHead tableBodies _) =
   drawTable headRows $ mconcat bodyRows
   where
@@ -77,37 +72,29 @@ drawList getPrefix listItems =
 
 drawListItem :: (Int -> String) -> Int -> [Block] -> Widget n
 drawListItem getPrefix i blocks =
-  hBox
-    [ str $ getPrefix i <> " ",
-      vBox $ drawPandocBlock <$> blocks
-    ]
+  hBox [str $ getPrefix i <> " ", vBox $ drawPandocBlock <$> blocks]
 
 drawInline :: Inline -> Widget n
 drawInline (Str t) = txt t
 drawInline (Emph ts) = italic $ hBox $ drawInline <$> ts
 drawInline (Underline ts) = underline $ vBox $ drawInline <$> ts
 drawInline (Strong ts) = bold $ hBox $ drawInline <$> ts
-drawInline (Strikeout ts) = withAttr (attrName "strikeout") $ hBox $ drawInline <$> ts
+drawInline (Strikeout ts) = strikethrough $ hBox $ drawInline <$> ts
 drawInline (Quoted _ ts) = italic $ hBox $ drawInline <$> Str "> " : ts
 drawInline (Cite _ ts) = drawInline $ Quoted SingleQuote ts
-drawInline (Code _ t) = drawInline $ Str t
-drawInline Space = str " "
-drawInline SoftBreak = str " "
-drawInline LineBreak = str "\n"
-drawInline (Link _ inline (url, _)) =
-  underline $
-    hyperlink url $
-      if null inline
-        then txt url
-        else hBox $ (drawInline <$> inline) <> [txt $ " " <> url]
+drawInline (Code _ t) = txt t
+drawInline Space = txt " "
+drawInline SoftBreak = txt " "
+drawInline LineBreak = txt "\n"
+drawInline (Link _ inline (url, _)) = underline $ hyperlink url linkWidget
+  where
+    linkWidget = hBox $ (drawInline <$> inline) <> [txt $ " " <> url]
 drawInline _ = emptyWidget
 
 drawTable :: [Row] -> [Row] -> Widget n
-drawTable headRows bodyRows =
-  padBottom (Pad 1) $
-    renderTable $
-      table $
-        (fmap bold . drawRow <$> headRows) <> (drawRow <$> bodyRows)
+drawTable headRows bodyRows = pb1 $ renderTable $ table rows
+  where
+    rows = mconcat [fmap bold . drawRow <$> headRows, drawRow <$> bodyRows]
 
 drawRow :: Row -> [Widget n]
 drawRow (Row _ cells) = hBox . fmap drawPandocBlock <$> blocks

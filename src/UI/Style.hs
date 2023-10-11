@@ -1,4 +1,4 @@
-module UI.Style (styleMap, selected, italic, bold, dim, underline) where
+module UI.Style (styleMap, selected, italic, bold, dim, underline, strikethrough, pb1) where
 
 import Brick
 import qualified Brick.AttrMap as A
@@ -19,6 +19,9 @@ underlineAttrName = attrName "underline"
 dimAttrName :: AttrName
 dimAttrName = attrName "dim"
 
+strikethroughAttrName :: AttrName
+strikethroughAttrName = attrName "strikethrough"
+
 styleMap :: A.AttrMap
 styleMap =
   A.attrMap
@@ -27,7 +30,8 @@ styleMap =
       (italicAttrName, V.defAttr `V.withStyle` V.italic),
       (boldAttrName, V.defAttr `V.withStyle` V.bold),
       (underlineAttrName, V.defAttr `V.withStyle` V.underline),
-      (dimAttrName, V.defAttr `V.withStyle` V.bold)
+      (dimAttrName, V.defAttr `V.withStyle` V.bold),
+      (strikethroughAttrName, V.defAttr `V.withStyle` V.strikethrough)
     ]
 
 selected :: Widget n -> Widget n
@@ -44,3 +48,9 @@ bold = withAttr boldAttrName
 
 italic :: Widget n -> Widget n
 italic = withAttr italicAttrName
+
+strikethrough :: Widget n -> Widget n
+strikethrough = withAttr strikethroughAttrName
+
+pb1 :: Widget n -> Widget n
+pb1 = padBottom (Pad 1)
