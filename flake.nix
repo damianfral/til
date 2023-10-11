@@ -35,7 +35,12 @@
   in
     {
       overlays.default = final: prev:
-        with final.haskell.lib; {
+        with final.haskell.lib; rec {
+          til = final.haskell.lib.justStaticExecutables (
+            haskellPackages.til.overrideAttrs (oldAttrs: {
+              configureFlags = oldAttrs.configureFlags ++ ["--ghc-option=-O2"];
+            })
+          );
           haskellPackages = prev.haskellPackages.override (old: {
             overrides =
               final.lib.composeExtensions
@@ -48,6 +53,36 @@
                   (self.callCabal2nix "til" filteredSrc {});
               });
           });
+        };
+      homeManagerModules.default = {
+        config,
+        pkgs,
+        lib,
+        ...
+      }:
+        with lib; let
+          cfg = config.programs.til;
+        in {
+          options.programs.til = {
+            enable = mkEnableOption "til";
+            editor = mkOption {
+              type = types.str;
+              description = "The text editor to open markdown files.";
+              default = "$EDITOR";
+            };
+            directory = mkOption {
+              type = types.str;
+              description = "The directory containing the log markdown files";
+              default = "$HOME/til";
+            };
+          };
+          config = let
+            til-app = self.apps.${pkgs.system}.til.program;
+            til = pkgs.writeShellScriptBin "til" ''
+              ${til-app} --editor ${cfg.editor} --directory ${cfg.directory} $@
+            '';
+          in
+            mkIf cfg.enable {home.packages = [til];};
         };
     }
     // flake-utils.lib.eachDefaultSystem (
@@ -70,13 +105,7 @@
         packages.til = pkgs.haskellPackages.til;
         packages.default = packages.til;
 
-        apps.til = flake-utils.lib.mkApp {
-          drv = pkgs.haskell.lib.justStaticExecutables (
-            packages.til.overrideAttrs (oldAttrs: {
-              configureFlags = oldAttrs.configureFlags ++ ["--ghc-option=-O2"];
-            })
-          );
-        };
+        apps.til = flake-utils.lib.mkApp {drv = pkgs.til;};
         apps.default = apps.til;
 
         devShells.default = pkgs.haskellPackages.shellFor {
