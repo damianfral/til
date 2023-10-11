@@ -94,6 +94,7 @@ eventHandler :: AppConfig -> BrickEvent Resources e -> EventM Resources AppState
 eventHandler appConfig (VtyEvent evt) = case evt of
   V.EvKey KEsc _ -> halt
   V.EvKey (KChar 'q') _ -> halt
+  V.EvKey (KChar 'r') _ -> refreshCurrentFile appConfig
   V.EvKey (KChar 'J') _ -> do
     modify $ #entries %~ movePrev
     refreshCurrentFile appConfig
