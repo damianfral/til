@@ -5,6 +5,7 @@ module UI.Markdown (drawMarkdown) where
 
 import Brick
 import Brick.Widgets.Border (border)
+import Brick.Widgets.Table
 import Data.Default
 import Data.List.Split (splitOn)
 import qualified Data.Text as T
@@ -58,6 +59,11 @@ drawPandocBlock (Header i _ inlines) =
           str "",
           hBox $ drawInline <$> inlines
         ]
+drawPandocBlock (Table _ __ _ tableHead tableBodies _) =
+  drawTable headRows $ mconcat bodyRows
+  where
+    (TableHead _ headRows) = tableHead
+    bodyRows = tableBodies <&> \(TableBody _ _ rows1 rows2) -> rows1 <> rows2
 drawPandocBlock _ = emptyWidget
 
 borderBox :: [Widget n] -> Widget n
@@ -95,3 +101,15 @@ drawInline (Link _ inline (url, _)) =
         then txt url
         else hBox $ (drawInline <$> inline) <> [txt $ " " <> url]
 drawInline _ = emptyWidget
+
+drawTable :: [Row] -> [Row] -> Widget n
+drawTable headRows bodyRows =
+  padBottom (Pad 1) $
+    renderTable $
+      table $
+        (fmap bold . drawRow <$> headRows) <> (drawRow <$> bodyRows)
+
+drawRow :: Row -> [Widget n]
+drawRow (Row _ cells) = hBox . fmap drawPandocBlock <$> blocks
+  where
+    blocks = cells <&> \(Cell _ _ _ _ bs) -> bs
