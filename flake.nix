@@ -1,5 +1,5 @@
 {
-  description = "TBD";
+  description = "Today I Log";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs";
