@@ -25,7 +25,7 @@ import UI
 
 data CLI w = CLI
   { directory :: w ::: FilePath <?> "Log directory" <!> "./",
-    editor :: w ::: Text <?> "Editor to open markdown files" <!> "hx"
+    editor :: w ::: FilePath <?> "Editor to open markdown files" <!> "vi"
   }
   deriving (Generic)
 
