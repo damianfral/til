@@ -1,13 +1,9 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Log where
+module Data.Zipper where
 
 import qualified Data.List.NonEmpty as NE
 import Relude
@@ -19,7 +15,7 @@ data Zipper a = Zipper
     previous :: [a],
     next :: [a]
   }
-  deriving stock (Show, Eq, Ord, Generic, Functor)
+  deriving (Show, Eq, Ord, Generic, Functor)
 
 zipperToNEList :: Zipper a -> NE.NonEmpty a
 zipperToNEList Zipper {..} = case reverse previous of

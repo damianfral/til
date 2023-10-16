@@ -12,7 +12,7 @@ import Brick.BChan
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async
 import Data.Text (pack)
-import Data.Time (Day, UTCTime (UTCTime), diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
+import Data.Time
 import Data.Version (showVersion)
 import Graphics.Vty
 import qualified Graphics.Vty as Vty
@@ -42,24 +42,17 @@ updateCurrentDay chan = do
 
 runApp :: IO ()
 runApp = do
-  options <-
-    unwrapRecord $
-      Relude.unwords
-        [ "til",
-          "v" <> pack (showVersion version),
-          "- a simple journal/log application"
-        ]
-
-  let appConfig = AppConfig $ directory options
+  options <- unwrapRecord $ unwords ["til", "v" <> pack (showVersion version)]
+  let appConfig = AppConfig (directory options) (editor options)
   initialAppState <- loadJournalDirectory appConfig
   chan <- newBChan 1
   asyncUpdate <- async $ forever $ updateCurrentDay chan
-  void $ mkCustomMain appConfig initialAppState chan
+  void $ customMain' appConfig initialAppState chan
   cancel asyncUpdate
   exitSuccess
 
-mkCustomMain :: AppConfig -> AppState -> BChan Day -> IO AppState
-mkCustomMain appConfig initialAppState chan = do
+customMain' :: AppConfig -> AppState -> BChan Day -> IO AppState
+customMain' appConfig initialAppState chan = do
   let buildVty = do
         v <- mkVty =<< standardIOConfig
         Vty.setMode (Vty.outputIface v) Vty.Mouse True

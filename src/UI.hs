@@ -1,14 +1,11 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module UI where
+module UI (app, AppConfig (..), AppState, loadJournalDirectory, getCurrentDay) where
 
 import Brick
 import Brick.Widgets.Border
@@ -21,9 +18,9 @@ import Data.Time (Day)
 import Data.Time.Format.ISO8601 (ISO8601 (iso8601Format), formatShow)
 import Data.Time.LocalTime
 import qualified Data.Time.Parsers as P
+import Data.Zipper
 import Graphics.Vty (Key (..))
 import qualified Graphics.Vty as V
-import Log
 import Relude
 import System.Directory (listDirectory)
 import System.FilePath
@@ -33,36 +30,33 @@ import qualified Text.Parsec as Parsec
 import UI.Markdown (drawMarkdown)
 import UI.Style (selected, styleMap)
 
-newtype AppConfig = AppConfig {appConfigLogPath :: FilePath}
+data AppConfig = AppConfig
+  { appConfigLogPath :: FilePath,
+    appConfigEditor :: FilePath
+  }
   deriving (Eq, Show, Ord, Generic)
 
-data AppState = AppState
-  {entries :: Zipper Day, markdown :: Text}
+data AppState = AppState {entries :: Zipper Day, markdown :: Text}
   deriving (Eq, Show, Ord, Generic)
 
 data Resources = SideBar | Content Day
   deriving (Eq, Show, Ord)
 
-getCurrentDay :: IO Day
-getCurrentDay = localDay . zonedTimeToLocalTime <$> getZonedTime
+--------------------------------------------------------------------------------
 
 app :: AppConfig -> App AppState Day Resources
 app appConfig = App {..}
   where
     appDraw = draw
-    appChooseCursor :: s -> [CursorLocation Resources] -> Maybe (CursorLocation Resources)
     appChooseCursor _ _ = Nothing
     appHandleEvent = eventHandler appConfig
     appStartEvent = pure ()
     appAttrMap = pure styleMap
 
 draw :: AppState -> [Widget Resources]
-draw appState@(AppState {..}) =
-  pure $
-    hBox
-      [ border $ drawSideBar appState,
-        border $ drawContent (current entries) markdown
-      ]
+draw appState@(AppState {..}) = pure $ hBox $ border <$> boxes
+  where
+    boxes = [drawSideBar appState, drawContent (current entries) markdown]
 
 drawSideBar :: AppState -> Widget Resources
 drawSideBar AppState {..} =
@@ -87,7 +81,10 @@ drawContent day =
 drawEntry :: Day -> Widget n
 drawEntry day = hBox [txt $ show day]
 
-eventHandler :: AppConfig -> BrickEvent Resources Day -> EventM Resources AppState ()
+--------------------------------------------------------------------------------
+
+eventHandler ::
+  AppConfig -> BrickEvent Resources Day -> EventM Resources AppState ()
 eventHandler _ (AppEvent day) = modify $ #entries . #next %~ (<> [day])
 eventHandler appConfig (VtyEvent evt) = case evt of
   V.EvKey KEsc _ -> halt
@@ -127,16 +124,13 @@ editContent :: AppConfig -> EventM Resources AppState ()
 editContent appConfig = do
   day <- gets $ view $ #entries . #current
   let file = dayToFilePath appConfig day
-  suspendAndResume' $ callProcess "hx" [file]
-
-isMarkdownFile :: FilePath -> Bool
-isMarkdownFile file = takeExtension file == ".md"
+  suspendAndResume' $ callProcess (appConfigEditor appConfig) [file]
 
 loadJournalDirectory :: AppConfig -> IO AppState
 loadJournalDirectory appConfig@AppConfig {..} = do
   today <- getCurrentDay
   paths <- Relude.filter isMarkdownFile <$> listDirectory appConfigLogPath
-  let daysFromFiles = rights $ Parsec.runParser P.day () appConfigLogPath <$> paths
+  let daysFromFiles = rights $ parseDay appConfigLogPath <$> paths
   let days = case reverse $ sort daysFromFiles of
         [] -> today :| []
         mostRecentDay : rest ->
@@ -148,12 +142,22 @@ loadJournalDirectory appConfig@AppConfig {..} = do
   entryContent <- readLogFile $ dayToFilePath appConfig $ entries ^. #current
   pure $ AppState {entries = entries, markdown = entryContent}
 
+parseDay :: Parsec.SourceName -> FilePath -> Either Parsec.ParseError Day
+parseDay = Parsec.runParser P.day ()
+
+isMarkdownFile :: FilePath -> Bool
+isMarkdownFile file = takeExtension file == ".md"
+
+dayToFilePath :: AppConfig -> Day -> FilePath
+dayToFilePath AppConfig {..} day =
+  appConfigLogPath </> formatShow iso8601Format day FP.<.> "md"
+
+getCurrentDay :: IO Day
+getCurrentDay = localDay . zonedTimeToLocalTime <$> getZonedTime
+
 readLogFile :: (MonadIO m) => FilePath -> m Text
 readLogFile file = do
   eContent <- liftIO $ try $ BS.readFile file
   case eContent of
     Left (SomeException _) -> pure ""
     Right c -> pure $ decodeUtf8With lenientDecode c
-
-dayToFilePath :: AppConfig -> Day -> FilePath
-dayToFilePath AppConfig {..} day = appConfigLogPath </> formatShow iso8601Format day FP.<.> "md"
