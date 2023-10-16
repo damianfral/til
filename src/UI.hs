@@ -40,16 +40,13 @@ data AppState = AppState
   {entries :: Zipper Day, markdown :: Text}
   deriving (Eq, Show, Ord, Generic)
 
-data AppAction = SelectPrevious | SelectNext | EditCurrent
-  deriving (Eq, Show, Ord)
-
 data Resources = SideBar | Content Day
   deriving (Eq, Show, Ord)
 
 getCurrentDay :: IO Day
 getCurrentDay = localDay . zonedTimeToLocalTime <$> getZonedTime
 
-app :: AppConfig -> App AppState e Resources
+app :: AppConfig -> App AppState Day Resources
 app appConfig = App {..}
   where
     appDraw = draw
@@ -90,7 +87,8 @@ drawContent day =
 drawEntry :: Day -> Widget n
 drawEntry day = hBox [txt $ show day]
 
-eventHandler :: AppConfig -> BrickEvent Resources e -> EventM Resources AppState ()
+eventHandler :: AppConfig -> BrickEvent Resources Day -> EventM Resources AppState ()
+eventHandler _ (AppEvent day) = modify $ #entries . #next %~ (<> [day])
 eventHandler appConfig (VtyEvent evt) = case evt of
   V.EvKey KEsc _ -> halt
   V.EvKey (KChar 'q') _ -> halt
