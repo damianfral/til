@@ -6,33 +6,26 @@ license: MIT
 license-file: LICENSE
 
 dependencies:
+  - async
   - base
   - brick
   - bytestring
+  - data-default
   - directory
   - filepath
-  - genvalidity
-  - genvalidity-text
-  - nonempty-containers
-  - optparse-applicative
+  - generic-lens
+  - lens
   - optparse-generic
+  - pandoc
   - parsec
   - process
   - relude
-  - sydtest
+  - split
   - text
   - time
   - time-parsers
   - vty
   - word-wrap
-  - pandoc
-  - pandoc-types
-  - data-default
-  - split
-  - generic-lens
-  - lens
-  - async
-
 
 library:
   source-dirs: ./src/

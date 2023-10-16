@@ -34,26 +34,24 @@
     };
   in
     {
-      overlays.default = final: prev:
-        with final.haskell.lib; rec {
-          til = final.haskell.lib.justStaticExecutables (
-            haskellPackages.til.overrideAttrs (oldAttrs: {
-              configureFlags = oldAttrs.configureFlags ++ ["--ghc-option=-O2"];
-            })
-          );
-          haskellPackages = prev.haskellPackages.override (old: {
-            overrides =
-              final.lib.composeExtensions
-              (old.overrides or (_: _: {}))
-              (self: super: {
-                sydtest = unmarkBroken (dontCheck super.sydtest);
-                til =
-                  self.generateOptparseApplicativeCompletions
-                  ["til"]
-                  (self.callCabal2nix "til" filteredSrc {});
-              });
-          });
-        };
+      overlays.default = final: prev: rec {
+        til = final.haskell.lib.justStaticExecutables (
+          haskellPackages.til.overrideAttrs (oldAttrs: {
+            configureFlags = oldAttrs.configureFlags ++ ["--ghc-option=-O2"];
+          })
+        );
+        haskellPackages = prev.haskellPackages.override (old: {
+          overrides =
+            final.lib.composeExtensions
+            (old.overrides or (_: _: {}))
+            (self: super: {
+              til =
+                self.generateOptparseApplicativeCompletions
+                ["til"]
+                (self.callCabal2nix "til" filteredSrc {});
+            });
+        });
+      };
       homeManagerModules.default = {
         config,
         pkgs,
