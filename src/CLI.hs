@@ -12,7 +12,7 @@ import Brick.BChan
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async
 import Data.Text (pack)
-import Data.Time
+import Data.Time (Day)
 import Data.Version (showVersion)
 import Graphics.Vty
 import qualified Graphics.Vty as Vty
@@ -33,12 +33,10 @@ instance ParseRecord (CLI Wrapped)
 
 updateCurrentDay :: BChan Day -> IO ()
 updateCurrentDay chan = do
-  now@(UTCTime currentDay _) <- getCurrentTime
-  let tomorrow = UTCTime (succ currentDay) 1
-  let delay = diffUTCTime tomorrow now
-  threadDelay $ round $ nominalDiffTimeToSeconds delay * 10 ^ (12 :: Int)
+  threadDelay $ 30 * 10 ^ (12 :: Int) -- wait 30 seconds
+  currentDay <- readBChan chan
   newCurrentDay <- getCurrentDay
-  writeBChan chan newCurrentDay
+  when (newCurrentDay > currentDay) $ writeBChan chan newCurrentDay
 
 runApp :: IO ()
 runApp = do
