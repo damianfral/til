@@ -23,13 +23,13 @@ import UI
 
 --------------------------------------------------------------------------------
 
-data CLI w = CLI
+data CLIOptions w = CLI
   { directory :: w ::: FilePath <?> "Log directory" <!> "./",
     editor :: w ::: FilePath <?> "Editor to open markdown files" <!> "vi"
   }
   deriving (Generic)
 
-instance ParseRecord (CLI Wrapped)
+instance ParseRecord (CLIOptions Wrapped)
 
 updateCurrentDay :: BChan Day -> IO ()
 updateCurrentDay chan = do
