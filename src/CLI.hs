@@ -43,6 +43,6 @@ runApp = do
   initialAppState <- loadJournalDirectory appConfig
   chan <- newBChan 1
   asyncUpdate <- async $ forever $ updateCurrentDay chan
-  void $ customMain' dispatcher' initialAppState chan
+  void $ customMain' appConfig dispatcher' initialAppState chan
   cancel asyncUpdate
   exitSuccess

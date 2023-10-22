@@ -5,7 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module UI (app, AppConfig (..), AppState, loadJournalDirectory, getCurrentDay, customMain', makeKeyDispatcher) where
+module UI (makeApp, AppConfig (..), AppState, loadJournalDirectory, getCurrentDay, customMain', makeKeyDispatcher, markdownHelp) where
 
 import Brick
 import Brick.BChan
@@ -39,7 +39,7 @@ data AppConfig = AppConfig
   }
   deriving (Eq, Show, Ord, Generic)
 
-data AppState = AppState {entries :: Zipper Day, markdown :: Text}
+data AppState = AppState {entries :: Zipper Day, markdown :: Text, help :: Bool}
   deriving (Eq, Show, Ord, Generic)
 
 data Resources = SideBar | Content Day
@@ -47,17 +47,20 @@ data Resources = SideBar | Content Day
 
 --------------------------------------------------------------------------------
 
-app :: KeyDispatcher Action AppEventM -> App AppState Day Resources
-app keyDispatcher' = App {..}
+makeApp :: AppConfig -> KeyDispatcher Action AppEventM -> App AppState Day Resources
+makeApp appConfig keyDispatcher' = App {..}
   where
-    appDraw = draw
+    appDraw = draw appConfig
     appChooseCursor _ _ = Nothing
     appHandleEvent = eventHandler keyDispatcher'
     appStartEvent = pure ()
     appAttrMap = pure styleMap
 
-draw :: AppState -> [Widget Resources]
-draw appState@(AppState {..}) = pure $ hBox $ border <$> boxes
+draw :: AppConfig -> AppState -> [Widget Resources]
+draw appConfig appState@(AppState {..}) =
+  if help
+    then [keybindingHelpWidget keyConfig (makeKeyEventHandlers appConfig)]
+    else pure $ hBox $ border <$> boxes
   where
     boxes = [drawSideBar appState, drawContent (current entries) markdown]
 
@@ -88,6 +91,7 @@ drawEntry day = hBox [txt $ show day]
 
 data Action
   = Exit
+  | ShowHelp
   | Refresh
   | SelectDayBefore
   | SelectDayAfter
@@ -102,6 +106,7 @@ keyConfig = newKeyConfig keyEventsMap [] []
     keyEventsMap =
       keyEvents
         [ ("exit", Exit),
+          ("show-help", ShowHelp),
           ("refresh", Refresh),
           ("select-day-before", SelectDayBefore),
           ("select-day-after", SelectDayAfter),
@@ -116,6 +121,7 @@ makeKeyEventHandlers :: AppConfig -> [KeyEventHandler k AppEventM]
 makeKeyEventHandlers appConfig =
   [ onKey KEsc "exit" halt,
     onKey (KChar 'q') "exit" halt,
+    onKey (KChar 'h') "help" $ modify $ #help %~ not,
     onKey (KChar 'r') "refresh current entry" $ refreshCurrentFile appConfig,
     onKey (KChar 'J') "select day before" $ do
       modify $ #entries %~ movePrev
@@ -128,6 +134,10 @@ makeKeyEventHandlers appConfig =
     onKey (KChar 'e') "edit entry" $ do
       editContent appConfig >> refreshCurrentFile appConfig
   ]
+
+markdownHelp :: AppConfig -> Text
+markdownHelp appConfig =
+  keybindingMarkdownTable keyConfig [("", makeKeyEventHandlers appConfig)]
 
 --------------------------------------------------------------------------------
 
@@ -177,7 +187,7 @@ loadJournalDirectory appConfig@AppConfig {..} = do
   let zippers = NE.reverse days <&> \day -> Zipper day [] []
   let entries = sconcat zippers
   entryContent <- readLogFile $ dayToFilePath appConfig $ entries ^. #current
-  pure $ AppState {entries = entries, markdown = entryContent}
+  pure $ AppState {entries = entries, markdown = entryContent, help = False}
 
 parseDay :: Parsec.SourceName -> FilePath -> Either Parsec.ParseError Day
 parseDay = Parsec.runParser P.day ()
@@ -199,14 +209,14 @@ readLogFile file = do
     Left (SomeException _) -> pure ""
     Right c -> pure $ decodeUtf8With lenientDecode c
 
-customMain' :: KeyDispatcher Action AppEventM -> AppState -> BChan Day -> IO AppState
-customMain' appConfig initialAppState chan = do
+customMain' :: AppConfig -> KeyDispatcher Action AppEventM -> AppState -> BChan Day -> IO AppState
+customMain' appConfig keyDispatcher' initialAppState chan = do
   let buildVty = do
         v <- mkVty =<< standardIOConfig
         Vty.setMode (Vty.outputIface v) Vty.Mouse True
         pure v
   initialVty <- liftIO buildVty
-  customMain initialVty buildVty (Just chan) (app appConfig) initialAppState
+  customMain initialVty buildVty (Just chan) (makeApp appConfig keyDispatcher') initialAppState
 
 makeKeyDispatcher :: AppConfig -> IO (KeyDispatcher Action (EventM Resources AppState))
 makeKeyDispatcher appConfig = do
