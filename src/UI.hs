@@ -5,9 +5,11 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module UI (app, AppConfig (..), AppState, loadJournalDirectory, getCurrentDay) where
+module UI (app, AppConfig (..), AppState, loadJournalDirectory, getCurrentDay, customMain', makeKeyDispatcher) where
 
 import Brick
+import Brick.BChan
+import Brick.Keybindings
 import Brick.Widgets.Border
 import Control.Exception (try)
 import Control.Lens
@@ -19,8 +21,9 @@ import Data.Time.Format.ISO8601 (ISO8601 (iso8601Format), formatShow)
 import Data.Time.LocalTime
 import qualified Data.Time.Parsers as P
 import Data.Zipper
-import Graphics.Vty (Key (..))
+import Graphics.Vty
 import qualified Graphics.Vty as V
+import qualified Graphics.Vty as Vty
 import Relude
 import System.Directory (listDirectory)
 import System.FilePath
@@ -44,12 +47,12 @@ data Resources = SideBar | Content Day
 
 --------------------------------------------------------------------------------
 
-app :: AppConfig -> App AppState Day Resources
-app appConfig = App {..}
+app :: KeyDispatcher Action AppEventM -> App AppState Day Resources
+app keyDispatcher' = App {..}
   where
     appDraw = draw
     appChooseCursor _ _ = Nothing
-    appHandleEvent = eventHandler appConfig
+    appHandleEvent = eventHandler keyDispatcher'
     appStartEvent = pure ()
     appAttrMap = pure styleMap
 
@@ -83,44 +86,78 @@ drawEntry day = hBox [txt $ show day]
 
 --------------------------------------------------------------------------------
 
+data Action
+  = Exit
+  | Refresh
+  | SelectDayBefore
+  | SelectDayAfter
+  | ScrollDown
+  | ScrollUp
+  | Edit
+  deriving (Show, Eq, Ord)
+
+keyConfig :: KeyConfig Action
+keyConfig = newKeyConfig keyEventsMap [] []
+  where
+    keyEventsMap =
+      keyEvents
+        [ ("exit", Exit),
+          ("refresh", Refresh),
+          ("select-day-before", SelectDayBefore),
+          ("select-day-after", SelectDayAfter),
+          ("select-day-after", SelectDayAfter),
+          ("scroll-down", ScrollDown),
+          ("scroll-up", ScrollUp)
+        ]
+
+type AppEventM = EventM Resources AppState
+
+makeKeyEventHandlers :: AppConfig -> [KeyEventHandler k AppEventM]
+makeKeyEventHandlers appConfig =
+  [ onKey KEsc "exit" halt,
+    onKey (KChar 'q') "exit" halt,
+    onKey (KChar 'r') "refresh current entry" $ refreshCurrentFile appConfig,
+    onKey (KChar 'J') "select day before" $ do
+      modify $ #entries %~ movePrev
+      refreshCurrentFile appConfig,
+    onKey (KChar 'K') "select day after" $ do
+      modify $ #entries %~ moveNext
+      refreshCurrentFile appConfig,
+    onKey (KChar 'j') "increase scroll" increaseScrollContent,
+    onKey (KChar 'k') "decrease scroll" decreaseScrollContent,
+    onKey (KChar 'e') "edit entry" $ do
+      editContent appConfig >> refreshCurrentFile appConfig
+  ]
+
+--------------------------------------------------------------------------------
+
 eventHandler ::
-  AppConfig -> BrickEvent Resources Day -> EventM Resources AppState ()
+  KeyDispatcher k AppEventM -> BrickEvent Resources Day -> AppEventM ()
 eventHandler _ (AppEvent day) = modify $ #entries . #next %~ (<> [day])
-eventHandler appConfig (VtyEvent evt) = case evt of
-  V.EvKey KEsc _ -> halt
-  V.EvKey (KChar 'q') _ -> halt
-  V.EvKey (KChar 'r') _ -> refreshCurrentFile appConfig
-  V.EvKey (KChar 'J') _ -> do
-    modify $ #entries %~ movePrev
-    refreshCurrentFile appConfig
-  V.EvKey (KChar 'K') _ -> do
-    modify $ #entries %~ moveNext
-    refreshCurrentFile appConfig
-  V.EvKey (KChar 'j') _ -> increaseScrollContent
-  V.EvKey (KChar 'k') _ -> decreaseScrollContent
-  V.EvKey (KChar 'e') _ -> editContent appConfig
+eventHandler keyDispatcher' (VtyEvent evt) = void $ case evt of
+  V.EvKey kchar mods -> void $ handleKey keyDispatcher' kchar mods
   _ -> pure ()
 eventHandler _ _ = pure ()
 
-refreshCurrentFile :: AppConfig -> EventM Resources AppState ()
+refreshCurrentFile :: AppConfig -> AppEventM ()
 refreshCurrentFile appConfig = do
   entries <- gets $ view #entries
   md <- readLogFile $ dayToFilePath appConfig (current entries)
   modify $ #markdown .~ md
 
-increaseScrollContent :: EventM Resources AppState ()
+increaseScrollContent :: AppEventM ()
 increaseScrollContent = do
   day <- gets $ view $ #entries . #current
   let resource = Content day
   vScrollBy (viewportScroll resource) 1
 
-decreaseScrollContent :: EventM Resources AppState ()
+decreaseScrollContent :: AppEventM ()
 decreaseScrollContent = do
   day <- gets $ view $ #entries . #current
   let resource = Content day
   vScrollBy (viewportScroll resource) (-1)
 
-editContent :: AppConfig -> EventM Resources AppState ()
+editContent :: AppConfig -> AppEventM ()
 editContent appConfig = do
   day <- gets $ view $ #entries . #current
   let file = dayToFilePath appConfig day
@@ -161,3 +198,18 @@ readLogFile file = do
   case eContent of
     Left (SomeException _) -> pure ""
     Right c -> pure $ decodeUtf8With lenientDecode c
+
+customMain' :: KeyDispatcher Action AppEventM -> AppState -> BChan Day -> IO AppState
+customMain' appConfig initialAppState chan = do
+  let buildVty = do
+        v <- mkVty =<< standardIOConfig
+        Vty.setMode (Vty.outputIface v) Vty.Mouse True
+        pure v
+  initialVty <- liftIO buildVty
+  customMain initialVty buildVty (Just chan) (app appConfig) initialAppState
+
+makeKeyDispatcher :: AppConfig -> IO (KeyDispatcher Action (EventM Resources AppState))
+makeKeyDispatcher appConfig = do
+  case keyDispatcher keyConfig (makeKeyEventHandlers appConfig) of
+    Right v -> pure v
+    Left _ -> putStrLn "Error creating KeyDispatcher" >> exitFailure
