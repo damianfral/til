@@ -11,7 +11,7 @@ nix run github:damianfral/til
 ### Options
 
 ```text
-til v0.0.0.1
+til v1.0.0
 
 Usage: til [--directory STRING] [--editor STRING]
 
