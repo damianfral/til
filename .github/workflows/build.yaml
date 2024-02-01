@@ -6,16 +6,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
       - name: install nix
-        uses: cachix/install-nix-action@v18
+        uses: cachix/install-nix-action@v25
       - run: nix build
 
   build-dev-shell:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
       - name: install nix
-        uses: cachix/install-nix-action@v18
+        uses: cachix/install-nix-action@v25
       - run: nix build .#devShells.x86_64-linux.default
