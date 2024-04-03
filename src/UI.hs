@@ -7,7 +7,7 @@
 
 module UI (makeApp, AppConfig (..), AppState, loadJournalDirectory, getCurrentDay, customMain', makeKeyDispatcher, markdownHelp) where
 
-import Brick
+import Brick hiding (Down)
 import Brick.BChan
 import Brick.Keybindings
 import Brick.Widgets.Border
@@ -24,6 +24,7 @@ import Data.Zipper
 import Graphics.Vty
 import qualified Graphics.Vty as V
 import qualified Graphics.Vty as Vty
+import Graphics.Vty.CrossPlatform (mkVty)
 import Relude
 import System.Directory (listDirectory)
 import System.FilePath
@@ -66,16 +67,16 @@ draw appConfig appState@(AppState {..}) =
 
 drawSideBar :: AppState -> Widget Resources
 drawSideBar AppState {..} =
-  hLimit 13 $
-    withVScrollBars OnRight $
-      viewport SideBar Vertical $
-        padLeft (Pad 1) $
-          vBox $
-            mconcat
-              [ drawEntry <$> reverse (next entries),
-                [selected $ visible $ drawEntry $ current entries],
-                drawEntry <$> previous entries
-              ]
+  hLimit 13
+    $ withVScrollBars OnRight
+    $ viewport SideBar Vertical
+    $ padLeft (Pad 1)
+    $ vBox
+    $ mconcat
+      [ drawEntry <$> reverse (next entries),
+        [selected $ visible $ drawEntry $ current entries],
+        drawEntry <$> previous entries
+      ]
 
 drawContent :: Day -> Text -> Widget Resources
 drawContent day =
@@ -178,7 +179,7 @@ loadJournalDirectory appConfig@AppConfig {..} = do
   today <- getCurrentDay
   paths <- Relude.filter isMarkdownFile <$> listDirectory appConfigLogPath
   let daysFromFiles = rights $ parseDay appConfigLogPath <$> paths
-  let days = case reverse $ sort daysFromFiles of
+  let days = case sortBy (comparing Down) daysFromFiles of
         [] -> today :| []
         mostRecentDay : rest ->
           if mostRecentDay == today
@@ -212,11 +213,12 @@ readLogFile file = do
 customMain' :: AppConfig -> KeyDispatcher Action AppEventM -> AppState -> BChan Day -> IO AppState
 customMain' appConfig keyDispatcher' initialAppState chan = do
   let buildVty = do
-        v <- mkVty =<< standardIOConfig
+        v <- mkVty defaultConfig
         Vty.setMode (Vty.outputIface v) Vty.Mouse True
         pure v
   initialVty <- liftIO buildVty
-  customMain initialVty buildVty (Just chan) (makeApp appConfig keyDispatcher') initialAppState
+  let app = makeApp appConfig keyDispatcher'
+  customMain initialVty buildVty (Just chan) app initialAppState
 
 makeKeyDispatcher :: AppConfig -> IO (KeyDispatcher Action (EventM Resources AppState))
 makeKeyDispatcher appConfig = do
