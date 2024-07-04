@@ -7,6 +7,11 @@
     nix-filter.url = "github:numtide/nix-filter";
     pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
     pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
+    weeder-nix.url = "github:NorfairKing/weeder-nix";
+    weeder-nix.inputs = {
+      nixpkgs.follows = "nixpkgs";
+      pre-commit-hooks.follows = "pre-commit-hooks";
+    };
     feedback.url = "github:NorfairKing/feedback";
   };
 
@@ -96,7 +101,6 @@
             nil.enable = true;
             alejandra.enable = true;
             ormolu.enable = true;
-            statix.enable = true;
           };
         };
       in rec {
@@ -125,7 +129,14 @@
           inherit (precommitCheck) shellHook;
         };
 
-        checks = {pre-commit-check = precommitCheck;};
+        checks = {
+          pre-commit-check = precommitCheck;
+          weeder-check = inputs.weeder-nix.lib.${system}.makeWeederCheck {
+            haskellPackages = pkgs.haskellPackages;
+            packages = ["til"];
+            reportOnly = true;
+          };
+        };
       }
     );
   nixConfig = {
