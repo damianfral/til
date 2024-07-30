@@ -48,7 +48,8 @@ data Resources = SideBar | Content Day
 
 --------------------------------------------------------------------------------
 
-makeApp :: AppConfig -> KeyDispatcher Action AppEventM -> App AppState Day Resources
+makeApp ::
+  AppConfig -> KeyDispatcher Action AppEventM -> App AppState Day Resources
 makeApp appConfig keyDispatcher' = App {..}
   where
     appDraw = draw appConfig
@@ -208,7 +209,8 @@ readLogFile file = do
     Left (SomeException _) -> pure ""
     Right c -> pure $ decodeUtf8With lenientDecode c
 
-customMain' :: AppConfig -> KeyDispatcher Action AppEventM -> AppState -> BChan Day -> IO AppState
+customMain' ::
+  AppConfig -> KeyDispatcher Action AppEventM -> AppState -> BChan Day -> IO AppState
 customMain' appConfig keyDispatcher' initialAppState chan = do
   let buildVty = do
         v <- mkVty defaultConfig
@@ -218,7 +220,8 @@ customMain' appConfig keyDispatcher' initialAppState chan = do
   let app = makeApp appConfig keyDispatcher'
   customMain initialVty buildVty (Just chan) app initialAppState
 
-makeKeyDispatcher :: AppConfig -> IO (KeyDispatcher Action (EventM Resources AppState))
+makeKeyDispatcher ::
+  AppConfig -> IO (KeyDispatcher Action (EventM Resources AppState))
 makeKeyDispatcher appConfig = do
   case keyDispatcher keyConfig (makeKeyEventHandlers appConfig) of
     Right v -> pure v
