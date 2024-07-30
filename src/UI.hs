@@ -179,14 +179,12 @@ loadJournalDirectory appConfig@AppConfig {..} = do
   today <- getCurrentDay
   paths <- Relude.filter isMarkdownFile <$> listDirectory appConfigLogPath
   let daysFromFiles = rights $ parseDay appConfigLogPath <$> paths
-  let days = case sortBy (comparing Down) daysFromFiles of
-        [] -> today :| []
-        mostRecentDay : rest ->
-          if mostRecentDay == today
-            then today :| rest
-            else today :| daysFromFiles
-  let zippers = NE.reverse days <&> \day -> Zipper day [] []
-  let entries = sconcat zippers
+  let previousDays =
+        case sortBy (comparing Down) daysFromFiles of
+          [] -> []
+          mostRecentDay : rest ->
+            if mostRecentDay == today then rest else mostRecentDay : rest
+  let entries = Zipper today previousDays []
   entryContent <- readLogFile $ dayToFilePath appConfig $ entries ^. #current
   pure $ AppState {entries = entries, markdown = entryContent, help = False}
 
