@@ -15,7 +15,6 @@ import Control.Exception (try)
 import Control.Lens
 import qualified Data.ByteString as BS
 import Data.Generics.Labels ()
-import qualified Data.List.NonEmpty as NE
 import Data.Time (Day)
 import Data.Time.Format.ISO8601 (ISO8601 (iso8601Format), formatShow)
 import Data.Time.LocalTime
