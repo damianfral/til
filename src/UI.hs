@@ -13,23 +13,25 @@ import Brick.Keybindings
 import Brick.Widgets.Border
 import Control.Exception (try)
 import Control.Lens
+import Data.Bits ((.&.))
 import qualified Data.ByteString as BS
 import Data.Generics.Labels ()
-import Data.Time (Day)
+import Data.Time (Day, fromGregorianValid)
 import Data.Time.Format.ISO8601 (ISO8601 (iso8601Format), formatShow)
 import Data.Time.LocalTime
-import qualified Data.Time.Parsers as P
 import Data.Zipper
-import Graphics.Vty
 import qualified Graphics.Vty as V
 import qualified Graphics.Vty as Vty
 import Graphics.Vty.CrossPlatform (mkVty)
-import Relude
+import Relude hiding ((<|>))
 import System.Directory (listDirectory)
 import System.FilePath
 import qualified System.FilePath as FP
 import System.Process (callProcess)
+import Text.Parsec (digit, (<|>))
+import qualified Text.Parsec as P
 import qualified Text.Parsec as Parsec
+import Text.ParserCombinators.Parsec (unexpected)
 import UI.Markdown (drawMarkdown)
 import UI.Style (selected, styleMap)
 
@@ -79,14 +81,14 @@ drawSideBar AppState {..} =
       ]
 
 drawContent :: Day -> Text -> Widget Resources
-drawContent day =
+drawContent d =
   withVScrollBars OnRight
-    . viewport (Content day) Vertical
+    . viewport (Content d) Vertical
     . padAll 1
     . drawMarkdown
 
 drawEntry :: Day -> Widget n
-drawEntry day = hBox [txt $ show day]
+drawEntry d = hBox [txt $ show d]
 
 --------------------------------------------------------------------------------
 
@@ -120,19 +122,19 @@ type AppEventM = EventM Resources AppState
 
 makeKeyEventHandlers :: AppConfig -> [KeyEventHandler k AppEventM]
 makeKeyEventHandlers appConfig =
-  [ onKey KEsc "exit" halt,
-    onKey (KChar 'q') "exit" halt,
-    onKey (KChar 'h') "help" $ modify $ #help %~ not,
-    onKey (KChar 'r') "refresh current entry" $ refreshCurrentFile appConfig,
-    onKey (KChar 'J') "select day before" $ do
+  [ onKey Vty.KEsc "exit" halt,
+    onKey (Vty.KChar 'q') "exit" halt,
+    onKey (Vty.KChar 'h') "help" $ modify $ #help %~ not,
+    onKey (Vty.KChar 'r') "refresh current entry" $ refreshCurrentFile appConfig,
+    onKey (Vty.KChar 'J') "select day before" $ do
       modify $ #entries %~ movePrev
       refreshCurrentFile appConfig,
-    onKey (KChar 'K') "select day after" $ do
+    onKey (Vty.KChar 'K') "select day after" $ do
       modify $ #entries %~ moveNext
       refreshCurrentFile appConfig,
-    onKey (KChar 'j') "increase scroll" increaseScrollContent,
-    onKey (KChar 'k') "decrease scroll" decreaseScrollContent,
-    onKey (KChar 'e') "edit entry" $ do
+    onKey (Vty.KChar 'j') "increase scroll" increaseScrollContent,
+    onKey (Vty.KChar 'k') "decrease scroll" decreaseScrollContent,
+    onKey (Vty.KChar 'e') "edit entry" $ do
       editContent appConfig >> refreshCurrentFile appConfig
   ]
 
@@ -144,7 +146,7 @@ markdownHelp appConfig =
 
 eventHandler ::
   KeyDispatcher k AppEventM -> BrickEvent Resources Day -> AppEventM ()
-eventHandler _ (AppEvent day) = modify $ #entries . #next %~ (<> [day])
+eventHandler _ (AppEvent d) = modify $ #entries . #next %~ (<> [d])
 eventHandler keyDispatcher' (VtyEvent evt) = void $ case evt of
   V.EvKey kchar mods -> void $ handleKey keyDispatcher' kchar mods
   _ -> pure ()
@@ -158,20 +160,20 @@ refreshCurrentFile appConfig = do
 
 increaseScrollContent :: AppEventM ()
 increaseScrollContent = do
-  day <- gets $ view $ #entries . #current
-  let resource = Content day
+  d <- gets $ view $ #entries . #current
+  let resource = Content d
   vScrollBy (viewportScroll resource) 1
 
 decreaseScrollContent :: AppEventM ()
 decreaseScrollContent = do
-  day <- gets $ view $ #entries . #current
-  let resource = Content day
+  d <- gets $ view $ #entries . #current
+  let resource = Content d
   vScrollBy (viewportScroll resource) (-1)
 
 editContent :: AppConfig -> AppEventM ()
 editContent appConfig = do
-  day <- gets $ view $ #entries . #current
-  let file = dayToFilePath appConfig day
+  d <- gets $ view $ #entries . #current
+  let file = dayToFilePath appConfig d
   suspendAndResume' $ callProcess (appConfigEditor appConfig) [file]
 
 loadJournalDirectory :: AppConfig -> IO AppState
@@ -189,14 +191,42 @@ loadJournalDirectory appConfig@AppConfig {..} = do
   pure $ AppState {entries = entries, markdown = entryContent, help = False}
 
 parseDay :: Parsec.SourceName -> FilePath -> Either Parsec.ParseError Day
-parseDay = Parsec.runParser P.day ()
+parseDay = Parsec.runParser day ()
+
+-- | Parse a date of the form @YYYY-MM-DD@.
+day :: Parsec.ParsecT String u Identity Day
+day = do
+  sign <- (P.char '-' $> negate) <|> (P.char '+' $> identity) <|> pure identity
+  y <- year
+  _ <- P.char '-'
+  m <- twoDigits
+  _ <- P.char '-'
+  d <- twoDigits
+  maybe (unexpected "invalid date") pure (fromGregorianValid (sign y) m d)
+
+year :: P.ParsecT String u Identity Integer
+year = do
+  ds <- some digit
+  if length ds < 4
+    then unexpected "expected year with at least 4 digits"
+    else pure (foldl' step 0 ds)
+  where
+    -- -48 to get the int from the ascii int code
+    step a w = a * 10 + fromIntegral (ord w - 48)
+
+twoDigits :: Parsec.ParsecT String u Identity Int
+twoDigits = do
+  a <- digit
+  b <- digit
+  let c2d c = ord c .&. 15
+  pure $! c2d a * 10 + c2d b
 
 isMarkdownFile :: FilePath -> Bool
 isMarkdownFile file = takeExtension file == ".md"
 
 dayToFilePath :: AppConfig -> Day -> FilePath
-dayToFilePath AppConfig {..} day =
-  appConfigLogPath </> formatShow iso8601Format day FP.<.> "md"
+dayToFilePath AppConfig {..} d =
+  appConfigLogPath </> formatShow iso8601Format d FP.<.> "md"
 
 getCurrentDay :: IO Day
 getCurrentDay = localDay . zonedTimeToLocalTime <$> getZonedTime
@@ -212,7 +242,7 @@ customMain' ::
   AppConfig -> KeyDispatcher Action AppEventM -> AppState -> BChan Day -> IO AppState
 customMain' appConfig keyDispatcher' initialAppState chan = do
   let buildVty = do
-        v <- mkVty defaultConfig
+        v <- mkVty Vty.defaultConfig
         Vty.setMode (Vty.outputIface v) Vty.Mouse True
         pure v
   initialVty <- liftIO buildVty

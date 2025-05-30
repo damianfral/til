@@ -23,7 +23,6 @@ dependencies:
   - split
   - text
   - time
-  - time-parsers
   - vty
   - vty-crossplatform
   - word-wrap
