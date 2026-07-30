@@ -25,14 +25,13 @@ Available options:
 
 | Keybinding | Description |
 | ---------- | ----------- |
-| `Esc` | exit |
-| `q` | exit |
+| `Esc` / `q` | exit |
 | `h` | help |
 | `r` | refresh current entry |
-| `J` | select day before |
-| `K` | select day after |
-| `j` | increase scroll |
-| `k` | decrease scroll |
+| `J` / `Ctrl+p` | select day before |
+| `K` / `Ctrl+n` | select day after |
+| `j` / `PageDown` | scroll down |
+| `k` / `PageUp` | scroll up |
 | `e` | edit entry |
 
 ## Home Manager module

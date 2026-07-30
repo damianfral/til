@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module UI.Markdown (drawMarkdown) where
+module UI.View.Markdown (drawMarkdown) where
 
 import Brick
 import Brick.Widgets.Border (border)

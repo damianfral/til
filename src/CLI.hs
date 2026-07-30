@@ -17,6 +17,9 @@ import Options.Generic
 import Paths_til
 import Relude hiding (on)
 import UI
+import UI.AppConfig
+import UI.AppState (getCurrentDay, makeAppState)
+import UI.EventHandler
 
 --------------------------------------------------------------------------------
 
@@ -40,7 +43,7 @@ runApp = do
   options <- unwrapRecord $ unwords ["til", "v" <> pack (showVersion version)]
   let appConfig = AppConfig (directory options) (editor options)
   dispatcher' <- makeKeyDispatcher appConfig
-  initialAppState <- loadJournalDirectory appConfig
+  initialAppState <- makeAppState appConfig
   chan <- newBChan 1
   asyncUpdate <- async $ forever $ updateCurrentDay chan
   void $ customMain' appConfig dispatcher' initialAppState chan
