@@ -1,5 +1,7 @@
 # TIL - Today I Log
 
+![screenshot](screenshot.png)
+
 `til` is a TUI for a markdown logbook/diary.
 
 ## Run
