@@ -49,7 +49,11 @@ handleEvent _ (AppEvent d) = modify $ #entries . #next %~ (<> [d])
 handleEvent keyDispatcher' (VtyEvent evt) = void $ case evt of
   V.EvKey kchar mods -> void $ KD.handleKey keyDispatcher' kchar mods
   _ -> pure ()
-handleEvent _ _ = pure ()
+handleEvent _ (MouseDown vp direction _mods _location) = case direction of
+  V.BScrollUp -> vScrollBy (viewportScroll vp) (-1)
+  V.BScrollDown -> vScrollBy (viewportScroll vp) 1
+  _ -> pure ()
+handleEvent _ (MouseUp {}) = pure ()
 
 refreshCurrentFile :: AppConfig -> AppEventM ()
 refreshCurrentFile AppConfig {..} = do
